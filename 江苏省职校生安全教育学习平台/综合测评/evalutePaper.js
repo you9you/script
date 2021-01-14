@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         evalutePaper
 // @namespace    https://github.com/you9you
-// @version      0.1
+// @version      0.2
 // @description  自动答题
 // @author       you9you
 // @match        *://aq.fhmooc.com/evalutePaper/*
@@ -12,8 +12,11 @@
     'use strict';
     
     let courseId = 'qkcfawcsxyrom0zrwghhwq';
-
+    
     let main = () => {
+        let ajaxList_getQuestionInfo = [];
+        let ajaxList_saveStuQuesAnswer = [];
+        
         $.when(getStuPaper(courseId)).done(function(ret){
             let paperId = ret['paperId'];
             let paperStuId = ret['paperStuId'];
@@ -21,9 +24,18 @@
             
             // 题目列表
             stuPaperQuesList.forEach(function(item, index){
-                // 题目信息
+                // 题目id
                 let quesId = item['quesId'];
-                $.when(getQuestionInfo(quesId)).done(function(ret){
+                
+                ajaxList_getQuestionInfo.push(getQuestionInfo(quesId));
+            });
+            
+            // 题目列表加载完成
+            $.when.apply($, ajaxList_getQuestionInfo).done(function(ret){
+                Array.from(arguments).forEach(function(item, index){
+                    ret = item[0];
+                    
+                    let quesId = ret['quesInfo'][0]['questionId'];
                     let answers = ret['quesInfo'][0]['answers'];
                     let answer = '';
                     
@@ -36,12 +48,17 @@
                     });
                     
                     // 保存进度
-                    saveStuQuesAnswer(paperStuId, paperId, quesId, answer);
+                    ajaxList_saveStuQuesAnswer.push(saveStuQuesAnswer(paperStuId, paperId, quesId, answer));
+                });
+                
+                // 保存进度完成
+                $.when.apply($,ajaxList_saveStuQuesAnswer).then(function(){
+                    submit(paperStuId, paperId);
+                    window.location.href = "http://aq.fhmooc.com/assessDetail/" + courseId;
+                    console.log('done');
                 });
             });
-            
-        })
-        console.log('done');
+        });
     };
     
     
@@ -79,6 +96,19 @@
                 paperId: paperId,
                 quesId: quesId,
                 answerJson: '{"quesId":"' + quesId + '","answer":"' + answer + '"}'
+            },
+            dataType: 'json'
+        });
+    };
+    
+    // 提交
+    let submit = (paperStuId, paperId) => {
+        return $.ajax({
+            url: "/api/design/PaperStudent/submitStuPaper",
+            type: 'post',
+            data: {
+                paperStuId: paperStuId,
+                paperId: paperId
             },
             dataType: 'json'
         });
